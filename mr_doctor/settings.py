@@ -19,9 +19,18 @@ def env_flag(name, default=False):
     return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
 
+def env_int(name, default):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return int(value)
+
+
 SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-dev-secret-key-change-me')
 
 DEBUG = env_flag('DEBUG', False)
+if 'RENDER' in os.environ:
+    DEBUG = False
 
 ALLOWED_HOSTS = [
     host.strip()
@@ -39,19 +48,24 @@ CSRF_TRUSTED_ORIGINS = [
 ]
 
 
-# Render Deployment Configuration
-if 'RENDER' in os.environ:
-    DEBUG = False
-    RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
-    if RENDER_EXTERNAL_HOSTNAME:
-        ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
-    
-    # Security settings for production
-    SECURE_SSL_REDIRECT = True
-    SESSION_COOKIE_SECURE = True
-    CSRF_COOKIE_SECURE = True
-    SECURE_BROWSER_XSS_FILTER = True
-    SECURE_CONTENT_TYPE_NOSNIFF = True
+RENDER_EXTERNAL_HOSTNAME = os.environ.get('RENDER_EXTERNAL_HOSTNAME')
+if RENDER_EXTERNAL_HOSTNAME and RENDER_EXTERNAL_HOSTNAME not in ALLOWED_HOSTS:
+    ALLOWED_HOSTS.append(RENDER_EXTERNAL_HOSTNAME)
+
+SECURE_SSL_REDIRECT = env_flag('SECURE_SSL_REDIRECT', not DEBUG)
+SECURE_REDIRECT_EXEMPT = [r'^healthz/$']
+SESSION_COOKIE_SECURE = env_flag('SESSION_COOKIE_SECURE', not DEBUG)
+CSRF_COOKIE_SECURE = env_flag('CSRF_COOKIE_SECURE', not DEBUG)
+SECURE_CONTENT_TYPE_NOSNIFF = env_flag('SECURE_CONTENT_TYPE_NOSNIFF', True)
+SECURE_HSTS_SECONDS = env_int('SECURE_HSTS_SECONDS', 31536000 if not DEBUG else 0)
+SECURE_HSTS_INCLUDE_SUBDOMAINS = env_flag(
+    'SECURE_HSTS_INCLUDE_SUBDOMAINS',
+    SECURE_HSTS_SECONDS > 0 and not DEBUG,
+)
+SECURE_HSTS_PRELOAD = env_flag(
+    'SECURE_HSTS_PRELOAD',
+    SECURE_HSTS_SECONDS > 0 and SECURE_HSTS_INCLUDE_SUBDOMAINS and not DEBUG,
+)
 
 INSTALLED_APPS = [
     'django.contrib.admin',
@@ -117,6 +131,7 @@ WSGI_APPLICATION = 'mr_doctor.wsgi.application'
 
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
 DATABASE_URL = os.getenv('DATABASE_URL')
+DATABASE_SSL_REQUIRE = env_flag('DATABASE_SSL_REQUIRE', False)
 
 USE_SQLITE = not DATABASE_URL
 
@@ -132,7 +147,7 @@ else:
         'default': DATABASE_URL,
         'conn_max_age': 600,
     }
-    if not DATABASE_URL.startswith('sqlite'):
+    if DATABASE_SSL_REQUIRE and not DATABASE_URL.startswith('sqlite'):
         database_config['ssl_require'] = True
 
     DATABASES = {

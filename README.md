@@ -207,7 +207,14 @@
 | `SECRET_KEY` | Yes | Django secret key |
 | `DEBUG` | No | Enables Django debug mode when true |
 | `DATABASE_URL` | No | Uses PostgreSQL when set, SQLite when absent |
+| `DATABASE_SSL_REQUIRE` | No | Requires TLS for external PostgreSQL connections when true |
 | `REDIS_URL` | No | Enables Redis-backed cache when set |
+| `SECURE_SSL_REDIRECT` | No | Redirects HTTP requests to HTTPS in production |
+| `SESSION_COOKIE_SECURE` | No | Sends session cookies only over HTTPS |
+| `CSRF_COOKIE_SECURE` | No | Sends CSRF cookies only over HTTPS |
+| `SECURE_HSTS_SECONDS` | No | Enables HTTP Strict Transport Security when greater than `0` |
+| `SECURE_HSTS_INCLUDE_SUBDOMAINS` | No | Applies HSTS to subdomains |
+| `SECURE_HSTS_PRELOAD` | No | Marks the site as HSTS preload-ready |
 | `PRODUCT_CACHE_TTL` | No | Product list/home cache timeout, default `300` |
 | `PRODUCT_DETAIL_CACHE_TTL` | No | Product detail cache timeout, default `600` |
 | `GROQ_API_KEY` | For AI features | Chat, vision, prescription extraction |
@@ -246,7 +253,7 @@ python manage.py runserver
 | `build.sh` | Installs dependencies, collects static files, runs migrations |
 | `gunicorn` | Production WSGI server |
 | `whitenoise` | Static file serving |
-| `RENDER` env detection | Applies production security settings |
+| Security env vars | Apply HTTPS, cookie, and HSTS settings per environment |
 | `CSRF_TRUSTED_ORIGINS` | Allows Railway, Render, localhost origins |
 
 ## Testing

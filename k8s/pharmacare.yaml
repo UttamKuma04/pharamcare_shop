@@ -27,6 +27,13 @@ data:
   DEBUG: "False"
   ALLOWED_HOSTS: pharmacare.example.com,www.pharmacare.example.com
   CSRF_TRUSTED_ORIGINS: https://pharmacare.example.com,https://www.pharmacare.example.com
+  DATABASE_SSL_REQUIRE: "False"
+  SECURE_SSL_REDIRECT: "True"
+  SESSION_COOKIE_SECURE: "True"
+  CSRF_COOKIE_SECURE: "True"
+  SECURE_HSTS_SECONDS: "31536000"
+  SECURE_HSTS_INCLUDE_SUBDOMAINS: "True"
+  SECURE_HSTS_PRELOAD: "True"
   PRODUCT_CACHE_TTL: "300"
   PRODUCT_DETAIL_CACHE_TTL: "600"
   GUNICORN_WORKERS: "3"
@@ -55,7 +62,7 @@ spec:
           type: RuntimeDefault
       containers:
         - name: web
-          image: ghcr.io/OWNER/pharmacare:latest
+          image: ghcr.io/uttamkuma04/pharmacare:latest
           imagePullPolicy: IfNotPresent
           ports:
             - containerPort: 8000
@@ -113,7 +120,7 @@ spec:
       restartPolicy: Never
       containers:
         - name: migrate
-          image: ghcr.io/OWNER/pharmacare:latest
+          image: ghcr.io/uttamkuma04/pharmacare:latest
           command: ["python", "manage.py", "migrate", "--noinput"]
           envFrom:
             - configMapRef:
