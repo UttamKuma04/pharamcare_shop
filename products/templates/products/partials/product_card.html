@@ -8,11 +8,8 @@
     {% endif %}
 
     <div class="prod-img-container">
-        {% if product.image %}
-        <img src="{{ product.image.url }}" alt="{{ product.name }}"
-            style="width: 100%; height: 100%; object-fit: contain;">
-        {% elif product.image_url %}
-        <img src="{{ product.image_url }}" alt="{{ product.name }}"
+        {% if product.display_image_url %}
+        <img src="{{ product.display_image_url }}" alt="{{ product.name }}"
             style="width: 100%; height: 100%; object-fit: contain;">
         {% else %}
         <i class="fas fa-box-open fa-4x" style="color: var(--secondary-color);"></i>
@@ -24,7 +21,7 @@
     <p class="prod-desc">{{ product.description|truncatewords:8 }}</p>
 
     <div class="prod-pricing">
-        <span class="final-price">₹{{ product.price }}</span>
+        <span class="final-price">Rs. {{ product.price }}</span>
     </div>
 
     <div style="display: grid; grid-template-columns: 1fr 3fr; gap: 10px; width: 100%;">

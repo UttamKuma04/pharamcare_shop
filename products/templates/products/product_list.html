@@ -14,9 +14,9 @@
         {% endfor %}
     </div>
 
-    {% if products.has_next %}
+    {% if has_next %}
     <div class="pagination" style="display: flex; justify-content: center; margin: 2rem 0;">
-        <a href="?page={{ products.next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if request.GET.category %}&category={{ request.GET.category }}{% endif %}"
+        <a href="?page={{ next_page_number }}{% if query %}&q={{ query }}{% endif %}{% if selected_category %}&category={{ selected_category }}{% endif %}"
             class="btn-primary" id="load-more-btn" style="padding: 1rem 3rem;">
             Load More Products <i class="fas fa-chevron-down" style="margin-left: 8px;"></i>
         </a>

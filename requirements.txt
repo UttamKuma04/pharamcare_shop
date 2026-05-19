@@ -11,6 +11,13 @@ psycopg2-binary
 dj-database-url
 python-dotenv
 django-extensions
+django-redis
+redis
+celery
+django-prometheus
+django-storages
+boto3
+sentry-sdk
 groq
 PyPDF2
 sarvamai==0.1.25

@@ -2,6 +2,6 @@
 {% include 'products/partials/product_card.html' %}
 {% endfor %}
 
-{% if products.has_next %}
-<div class="pagination-metadata" data-next-page="{{ products.next_page_number }}" style="display:none;"></div>
+{% if has_next %}
+<div class="pagination-metadata" data-next-page="{{ next_page_number }}" style="display:none;"></div>
 {% endif %}

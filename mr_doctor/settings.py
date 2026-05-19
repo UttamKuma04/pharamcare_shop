@@ -1,21 +1,41 @@
-from pathlib import Path
 import os
+import importlib.util
+from pathlib import Path
+
+import dj_database_url
+from dotenv import load_dotenv
+
+load_dotenv()
+
 BASE_DIR = Path(__file__).resolve().parent.parent
+WHITENOISE_AVAILABLE = importlib.util.find_spec('whitenoise') is not None
+DJANGO_PROMETHEUS_AVAILABLE = importlib.util.find_spec('django_prometheus') is not None
 
 
-SECRET_KEY = os.getenv('SECRET_KEY')
+def env_flag(name, default=False):
+    value = os.getenv(name)
+    if value is None:
+        return default
+    return value.strip().lower() in {'1', 'true', 'yes', 'on'}
 
-DEBUG = False
 
-ALLOWED_HOSTS = ["*"]  
+SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-dev-secret-key-change-me')
 
-ALLOWED_HOSTS = ["*"]
+DEBUG = env_flag('DEBUG', False)
+
+ALLOWED_HOSTS = [
+    host.strip()
+    for host in os.getenv('ALLOWED_HOSTS', 'localhost,127.0.0.1').split(',')
+    if host.strip()
+]
 
 CSRF_TRUSTED_ORIGINS = [
-    "https://*.up.railway.app",
-    "https://*.onrender.com",
-    "http://127.0.0.1:8000",
-    "http://localhost:8000",
+    origin.strip()
+    for origin in os.getenv(
+        'CSRF_TRUSTED_ORIGINS',
+        'http://127.0.0.1:8000,http://localhost:8000',
+    ).split(',')
+    if origin.strip()
 ]
 
 
@@ -48,6 +68,9 @@ INSTALLED_APPS = [
     'Chatbot',
 ]
 
+if DJANGO_PROMETHEUS_AVAILABLE:
+    INSTALLED_APPS.insert(0, 'django_prometheus')
+
 MEDIA_URL = '/media/'
 MEDIA_ROOT = BASE_DIR / 'media'
 
@@ -58,7 +81,6 @@ LOGOUT_REDIRECT_URL = 'products:home'
 
 MIDDLEWARE = [
     'django.middleware.security.SecurityMiddleware',
-    'whitenoise.middleware.WhiteNoiseMiddleware',
     'django.contrib.sessions.middleware.SessionMiddleware',
     'django.middleware.common.CommonMiddleware',
     'django.middleware.csrf.CsrfViewMiddleware',
@@ -66,6 +88,13 @@ MIDDLEWARE = [
     'django.contrib.messages.middleware.MessageMiddleware',
     'django.middleware.clickjacking.XFrameOptionsMiddleware',
 ]
+
+if DJANGO_PROMETHEUS_AVAILABLE:
+    MIDDLEWARE.insert(0, 'django_prometheus.middleware.PrometheusBeforeMiddleware')
+    MIDDLEWARE.append('django_prometheus.middleware.PrometheusAfterMiddleware')
+
+if WHITENOISE_AVAILABLE:
+    MIDDLEWARE.insert(1, 'whitenoise.middleware.WhiteNoiseMiddleware')
 
 ROOT_URLCONF = 'mr_doctor.urls'
 
@@ -86,23 +115,58 @@ TEMPLATES = [
 
 WSGI_APPLICATION = 'mr_doctor.wsgi.application'
 
-
-
-# Database Configuration - Supabase (PostgreSQL)
-import dj_database_url
-from dotenv import load_dotenv
-
-load_dotenv()
-
 GROQ_API_KEY = os.getenv('GROQ_API_KEY')
+DATABASE_URL = os.getenv('DATABASE_URL')
 
-DATABASES = {
-    'default': dj_database_url.config(
-        default=os.getenv('DATABASE_URL', f'sqlite:///{BASE_DIR / "db.sqlite3"}'),
-        conn_max_age=600,
-        ssl_require=True if os.getenv('DATABASE_URL') else False
-    )
-}
+USE_SQLITE = not DATABASE_URL
+
+if USE_SQLITE:
+    DATABASES = {
+        'default': {
+            'ENGINE': 'django.db.backends.sqlite3',
+            'NAME': BASE_DIR / 'db.sqlite3',
+        }
+    }
+else:
+    database_config = {
+        'default': DATABASE_URL,
+        'conn_max_age': 600,
+    }
+    if not DATABASE_URL.startswith('sqlite'):
+        database_config['ssl_require'] = True
+
+    DATABASES = {
+        'default': dj_database_url.config(**database_config)
+    }
+
+REDIS_URL = os.getenv('REDIS_URL')
+CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL or 'redis://localhost:6379/1')
+CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL or 'redis://localhost:6379/1')
+CELERY_TASK_ACKS_LATE = True
+CELERY_TASK_REJECT_ON_WORKER_LOST = True
+CELERY_WORKER_PREFETCH_MULTIPLIER = 1
+PRODUCT_CACHE_TTL = int(os.getenv('PRODUCT_CACHE_TTL', '300'))
+PRODUCT_DETAIL_CACHE_TTL = int(os.getenv('PRODUCT_DETAIL_CACHE_TTL', '600'))
+
+if REDIS_URL and importlib.util.find_spec('django_redis'):
+    CACHES = {
+        'default': {
+            'BACKEND': 'django_redis.cache.RedisCache',
+            'LOCATION': REDIS_URL,
+            'KEY_PREFIX': 'mr_doctor',
+            'OPTIONS': {
+                'CLIENT_CLASS': 'django_redis.client.DefaultClient',
+                'IGNORE_EXCEPTIONS': True,
+            },
+        }
+    }
+else:
+    CACHES = {
+        'default': {
+            'BACKEND': 'django.core.cache.backends.locmem.LocMemCache',
+            'LOCATION': 'mr-doctor-local-cache',
+        }
+    }
 
 
 
@@ -135,16 +199,26 @@ USE_TZ = True
 
 STATIC_URL = 'static/'
 STATIC_ROOT = BASE_DIR / 'staticfiles'
-STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
+
+if WHITENOISE_AVAILABLE:
+    STATICFILES_STORAGE = 'whitenoise.storage.CompressedManifestStaticFilesStorage'
 
 
 
 DEFAULT_AUTO_FIELD = 'django.db.models.BigAutoField'
 
+
+
+#<<<<<<<<<<<<<<<SMTP SET-UP>>>>>>>>>>>>>>>>>>
 EMAIL_BACKEND = 'django.core.mail.backends.smtp.EmailBackend'
 EMAIL_HOST = 'smtp-relay.brevo.com'
 EMAIL_PORT = 587
 EMAIL_USE_TLS = True
 EMAIL_HOST_USER = os.getenv('EMAIL_HOST_USER')
 EMAIL_HOST_PASSWORD = os.getenv('EMAIL_HOST_PASSWORD')
-DEFAULT_FROM_EMAIL = 'abhirajipu23@gmail.com'
+DEFAULT_FROM_EMAIL = os.getenv("DEFAULT_FROM_EMAIL", EMAIL_HOST_USER or "no-reply@pharmacare.local")
+
+SECURE_PROXY_SSL_HEADER = ('HTTP_X_FORWARDED_PROTO', 'https')
+SESSION_COOKIE_HTTPONLY = True
+CSRF_COOKIE_HTTPONLY = True
+X_FRAME_OPTIONS = 'DENY'

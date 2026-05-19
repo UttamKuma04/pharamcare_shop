@@ -1,0 +1,169 @@
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: pharmacare
+---
+apiVersion: v1
+kind: Secret
+metadata:
+  name: pharmacare-secrets
+  namespace: pharmacare
+type: Opaque
+stringData:
+  SECRET_KEY: change-me
+  DATABASE_URL: postgres://pharmacare:change-me@postgres:5432/pharmacare
+  REDIS_URL: redis://redis:6379/0
+  GROQ_API_KEY: ""
+  SARVAM_API_KEY: ""
+  EMAIL_HOST_USER: ""
+  EMAIL_HOST_PASSWORD: ""
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: pharmacare-config
+  namespace: pharmacare
+data:
+  DEBUG: "False"
+  ALLOWED_HOSTS: pharmacare.example.com,www.pharmacare.example.com
+  CSRF_TRUSTED_ORIGINS: https://pharmacare.example.com,https://www.pharmacare.example.com
+  PRODUCT_CACHE_TTL: "300"
+  PRODUCT_DETAIL_CACHE_TTL: "600"
+  GUNICORN_WORKERS: "3"
+  GUNICORN_THREADS: "2"
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: web
+  namespace: pharmacare
+spec:
+  replicas: 3
+  selector:
+    matchLabels:
+      app: pharmacare
+      component: web
+  template:
+    metadata:
+      labels:
+        app: pharmacare
+        component: web
+    spec:
+      securityContext:
+        runAsNonRoot: true
+        seccompProfile:
+          type: RuntimeDefault
+      containers:
+        - name: web
+          image: ghcr.io/OWNER/pharmacare:latest
+          imagePullPolicy: IfNotPresent
+          ports:
+            - containerPort: 8000
+          envFrom:
+            - configMapRef:
+                name: pharmacare-config
+            - secretRef:
+                name: pharmacare-secrets
+          readinessProbe:
+            httpGet:
+              path: /healthz/
+              port: 8000
+            periodSeconds: 10
+            timeoutSeconds: 3
+          livenessProbe:
+            httpGet:
+              path: /healthz/
+              port: 8000
+            initialDelaySeconds: 30
+            periodSeconds: 30
+            timeoutSeconds: 5
+          resources:
+            requests:
+              cpu: 250m
+              memory: 256Mi
+            limits:
+              cpu: "1"
+              memory: 768Mi
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop: ["ALL"]
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: web
+  namespace: pharmacare
+spec:
+  selector:
+    app: pharmacare
+    component: web
+  ports:
+    - port: 80
+      targetPort: 8000
+---
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: migrate
+  namespace: pharmacare
+spec:
+  template:
+    spec:
+      restartPolicy: Never
+      containers:
+        - name: migrate
+          image: ghcr.io/OWNER/pharmacare:latest
+          command: ["python", "manage.py", "migrate", "--noinput"]
+          envFrom:
+            - configMapRef:
+                name: pharmacare-config
+            - secretRef:
+                name: pharmacare-secrets
+---
+apiVersion: autoscaling/v2
+kind: HorizontalPodAutoscaler
+metadata:
+  name: web
+  namespace: pharmacare
+spec:
+  scaleTargetRef:
+    apiVersion: apps/v1
+    kind: Deployment
+    name: web
+  minReplicas: 3
+  maxReplicas: 20
+  metrics:
+    - type: Resource
+      resource:
+        name: cpu
+        target:
+          type: Utilization
+          averageUtilization: 65
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: pharmacare
+  namespace: pharmacare
+  annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
+    nginx.ingress.kubernetes.io/proxy-body-size: "10m"
+    nginx.ingress.kubernetes.io/ssl-redirect: "true"
+spec:
+  ingressClassName: nginx
+  tls:
+    - hosts:
+        - pharmacare.example.com
+      secretName: pharmacare-tls
+  rules:
+    - host: pharmacare.example.com
+      http:
+        paths:
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: web
+                port:
+                  number: 80

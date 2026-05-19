@@ -1,91 +1,51 @@
-from django.shortcuts import render, get_object_or_404
-from django.db.models import Q
-from .models import Product, Category
 import logging
-from django.conf import settings
-from django.core.files.storage import default_storage
-from django.core.files.base import ContentFile
 
+from django.conf import settings
+from django.http import Http404
+from django.shortcuts import render
+from rest_framework import viewsets
+from rest_framework.decorators import action
+from rest_framework.response import Response
+
+from .cache import (
+    get_homepage_payload,
+    get_product_detail_payload,
+    get_product_list_payload,
+)
+from .models import Product
+from .serializers import ProductSerializer
 
 
 def home(request):
-    # Fetch all active products sorted by newest first
-    all_products = Product.objects.filter(active=True).order_by('-created_at')
-    
-    featured_products = []
-    seen_categories = set()
-    
-    # First pass: try to get one from each category
-    for product in all_products:
-        if product.category_id not in seen_categories:
-            featured_products.append(product)
-            seen_categories.add(product.category_id)
-            if len(featured_products) == 6:
-                break
-    
-    # Second pass: fill up to 6 if needed
-    if len(featured_products) < 6:
-        for product in all_products:
-            if product not in featured_products:
-                featured_products.append(product)
-                if len(featured_products) == 6:
-                    break
-                    
-    categories = Category.objects.all()
-    return render(request, 'products/home.html', {
-        'featured_products': featured_products,
-        'categories': categories
-    })
+    return render(request, 'products/home.html', get_homepage_payload())
+
 
 def product_list(request):
-    products = Product.objects.filter(active=True)
     query = request.GET.get('q')
     category_slug = request.GET.get('category')
-    
-    if query:
-        products = products.filter(
-            Q(name__icontains=query) | 
-            Q(description__icontains=query)
-        )
-    
-    from django.core.paginator import Paginator
-
-    if category_slug:
-        products = products.filter(category__slug=category_slug)
-    
-    paginator = Paginator(products, 50)
     page_number = request.GET.get('page')
-    page_obj = paginator.get_page(page_number)
-    
-    # Robust AJAX detection
+    context = get_product_list_payload(
+        query=query,
+        category_slug=category_slug,
+        page_number=page_number,
+    )
+
     is_ajax = (
         request.headers.get('x-requested-with') == 'XMLHttpRequest' or
         request.GET.get('ajax') == '1'
     )
 
     if is_ajax:
-        return render(request, 'products/partials/product_list_chunk.html', {'products': page_obj})
+        return render(request, 'products/partials/product_list_chunk.html', context)
 
-    categories = Category.objects.all()
-    return render(request, 'products/product_list.html', {
-        'products': page_obj,
-        'categories': categories,
-        'query': query
-    })
+    return render(request, 'products/product_list.html', context)
+
 
 def product_detail(request, slug):
-    product = get_object_or_404(Product, slug=slug, active=True)
+    product = get_product_detail_payload(slug)
+    if product is None:
+        raise Http404('Product not found')
     return render(request, 'products/product_detail.html', {'product': product})
-
-
-
-
-from rest_framework import viewsets
-from rest_framework.decorators import action
-from rest_framework.response import Response
-
-from .models import Product
-from .serializers import ProductSerializer
 
 
 class ProductsApi(viewsets.ModelViewSet):

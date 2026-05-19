@@ -1,0 +1,14 @@
+services:
+  web:
+    command: python manage.py runserver 0.0.0.0:8000
+    ports:
+      - "8000:8000"
+    volumes:
+      - .:/app
+    environment:
+      DEBUG: "True"
+      DATABASE_URL: postgres://pharmacare:pharmacare@postgres:5432/pharmacare
+      REDIS_URL: redis://redis:6379/0
+
+  nginx:
+    profiles: ["edge"]

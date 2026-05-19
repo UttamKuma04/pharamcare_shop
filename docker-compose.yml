@@ -1,0 +1,129 @@
+services:
+  postgres:
+    image: postgres:16-alpine
+    environment:
+      POSTGRES_DB: pharmacare
+      POSTGRES_USER: pharmacare
+      POSTGRES_PASSWORD: pharmacare
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U pharmacare -d pharmacare"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks: [backend]
+
+  redis:
+    image: redis:7-alpine
+    command: ["redis-server", "--appendonly", "yes"]
+    volumes:
+      - redis_data:/data
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 3s
+      retries: 5
+    networks: [backend]
+
+  web:
+    build:
+      context: .
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    volumes:
+      - static_data:/app/staticfiles
+      - media_data:/app/media
+    command: >
+      sh -c "python manage.py migrate --noinput &&
+             python manage.py collectstatic --noinput &&
+             gunicorn mr_doctor.wsgi:application --bind 0.0.0.0:8000
+             --workers $${GUNICORN_WORKERS:-3}
+             --threads $${GUNICORN_THREADS:-2}
+             --timeout $${GUNICORN_TIMEOUT:-60}
+             --access-logfile - --error-logfile -"
+    healthcheck:
+      test: ["CMD", "curl", "-fsS", "http://127.0.0.1:8000/healthz/"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+    networks: [backend]
+
+  worker:
+    build:
+      context: .
+    env_file:
+      - .env
+    depends_on:
+      postgres:
+        condition: service_healthy
+      redis:
+        condition: service_healthy
+    command: >
+      sh -c "celery -A mr_doctor worker --loglevel=INFO --concurrency=$${CELERY_CONCURRENCY:-2}"
+    profiles: ["workers"]
+    networks: [backend]
+
+  nginx:
+    image: nginx:1.27-alpine
+    depends_on:
+      web:
+        condition: service_healthy
+    ports:
+      - "80:80"
+      - "443:443"
+    volumes:
+      - ./nginx/nginx.conf:/etc/nginx/nginx.conf:ro
+      - static_data:/app/staticfiles:ro
+      - media_data:/app/media:ro
+      - certbot_web:/var/www/certbot
+      - letsencrypt:/etc/letsencrypt
+    networks: [backend, edge]
+
+  prometheus:
+    image: prom/prometheus:v2.55.1
+    profiles: ["monitoring"]
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus_data:/prometheus
+    ports:
+      - "9090:9090"
+    networks: [backend]
+
+  grafana:
+    image: grafana/grafana:11.3.0
+    profiles: ["monitoring"]
+    environment:
+      GF_SECURITY_ADMIN_PASSWORD: admin
+    volumes:
+      - grafana_data:/var/lib/grafana
+    ports:
+      - "3000:3000"
+    networks: [backend]
+
+  loki:
+    image: grafana/loki:3.3.0
+    profiles: ["monitoring"]
+    ports:
+      - "3100:3100"
+    networks: [backend]
+
+networks:
+  edge:
+  backend:
+    internal: true
+
+volumes:
+  postgres_data:
+  redis_data:
+  static_data:
+  media_data:
+  certbot_web:
+  letsencrypt:
+  prometheus_data:
+  grafana_data:

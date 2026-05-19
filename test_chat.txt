@@ -1,3 +1,0 @@
-This is a test text file.
-It contains some secret information: The magic word is "PharmaMagic".
-If the chatbot can read this, it should be able to tell me the magic word.

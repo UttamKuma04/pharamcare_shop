@@ -74,30 +74,14 @@
 
 <h2 class="section-title">Shop by Category</h2>
 <div class="category-scroll">
-    <a href="{% url 'products:product_list' %}?category=medicines" class="cat-item">
-        <div class="cat-img"><i class="fas fa-pills"></i></div>
-        <span class="cat-name">Medicines</span>
+    {% for category in categories %}
+    <a href="{% url 'products:product_list' %}?category={{ category.slug }}" class="cat-item">
+        <div class="cat-img"><i class="fas {{ category.icon_class }}"></i></div>
+        <span class="cat-name">{{ category.name }}</span>
     </a>
-    <a href="{% url 'products:product_list' %}?category=vitamins" class="cat-item">
-        <div class="cat-img"><i class="fas fa-apple-alt"></i></div>
-        <span class="cat-name">Vitamins</span>
-    </a>
-    <a href="{% url 'products:product_list' %}?category=diabetes" class="cat-item">
-        <div class="cat-img"><i class="fas fa-tint"></i></div>
-        <span class="cat-name">Diabetes</span>
-    </a>
-    <a href="{% url 'products:product_list' %}?category=devices" class="cat-item">
-        <div class="cat-img"><i class="fas fa-heartbeat"></i></div>
-        <span class="cat-name">Devices</span>
-    </a>
-    <a href="{% url 'products:product_list' %}?category=ayurveda" class="cat-item">
-        <div class="cat-img"><i class="fas fa-leaf"></i></div>
-        <span class="cat-name">Ayurveda</span>
-    </a>
-    <a href="{% url 'products:product_list' %}?category=baby-care" class="cat-item">
-        <div class="cat-img"><i class="fas fa-baby-carriage"></i></div>
-        <span class="cat-name">Baby Care</span>
-    </a>
+    {% empty %}
+    <p>No categories available right now.</p>
+    {% endfor %}
 </div>
 
 <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 2rem;">
