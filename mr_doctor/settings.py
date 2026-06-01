@@ -1,6 +1,7 @@
 import os
 import importlib.util
 from pathlib import Path
+from urllib.parse import parse_qsl, urlencode, urlsplit, urlunsplit
 
 import dj_database_url
 from dotenv import load_dotenv
@@ -24,6 +25,16 @@ def env_int(name, default):
     if value is None:
         return default
     return int(value)
+
+
+def redis_url_with_ssl_cert_reqs(url):
+    if not url or not url.startswith('rediss://'):
+        return url
+
+    parts = urlsplit(url)
+    query = dict(parse_qsl(parts.query, keep_blank_values=True))
+    query.setdefault('ssl_cert_reqs', 'CERT_REQUIRED')
+    return urlunsplit(parts._replace(query=urlencode(query)))
 
 
 SECRET_KEY = os.getenv('SECRET_KEY', 'unsafe-dev-secret-key-change-me')
@@ -155,8 +166,12 @@ else:
     }
 
 REDIS_URL = os.getenv('REDIS_URL')
-CELERY_BROKER_URL = os.getenv('CELERY_BROKER_URL', REDIS_URL or 'redis://localhost:6379/1')
-CELERY_RESULT_BACKEND = os.getenv('CELERY_RESULT_BACKEND', REDIS_URL or 'redis://localhost:6379/1')
+CELERY_BROKER_URL = redis_url_with_ssl_cert_reqs(
+    os.getenv('CELERY_BROKER_URL', REDIS_URL or 'redis://localhost:6379/1')
+)
+CELERY_RESULT_BACKEND = redis_url_with_ssl_cert_reqs(
+    os.getenv('CELERY_RESULT_BACKEND', REDIS_URL or 'redis://localhost:6379/1')
+)
 CELERY_TASK_ACKS_LATE = True
 CELERY_TASK_REJECT_ON_WORKER_LOST = True
 CELERY_WORKER_PREFETCH_MULTIPLIER = 1
