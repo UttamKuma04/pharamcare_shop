@@ -7,6 +7,8 @@ from django.core.cache import cache
 from django.db import connection
 from django.http import JsonResponse
 
+from accounts.forms import AsyncPasswordResetForm
+
 
 def healthz(request):
     checks = {"app": "ok", "database": "ok", "cache": "ok"}
@@ -39,6 +41,7 @@ urlpatterns = [
     path('cart/', include('cart.urls')),
     path('accounts/', include('accounts.urls')),
     path('accounts/password_reset/', auth_views.PasswordResetView.as_view(
+        form_class=AsyncPasswordResetForm,
         html_email_template_name='registration/password_reset_email.html'
     ), name='password_reset'),
     path('accounts/', include('django.contrib.auth.urls')),
